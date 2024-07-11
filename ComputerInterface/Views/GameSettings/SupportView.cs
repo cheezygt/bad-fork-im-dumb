@@ -1,3 +1,4 @@
+using ComputerInterface.Extensions;
 using ComputerInterface.ViewLib;
 using GorillaNetworking;
 using System.Text;
@@ -18,7 +19,7 @@ namespace ComputerInterface.Views.GameSettings
 
         public void Redraw()
         {
-            var str = new StringBuilder();
+            StringBuilder str = new();
 
             DrawHeader(str);
             DrawOptions(str);
@@ -38,7 +39,7 @@ namespace ComputerInterface.Views.GameSettings
         {
             if (!BaseGameInterface.displaySupportTab)
             {
-                str.AppendLine("To view support and account inforamtion, press the Option 1 key.").AppendLines(2);
+                str.AppendLine("To roomView support and account inforamtion, press the Option 1 key.").AppendLines(2);
                 str.AppendClr("Only show this information to Another Axiom support.", ColorUtility.ToHtmlStringRGB(Color.red));
                 SetText(str);
                 return;

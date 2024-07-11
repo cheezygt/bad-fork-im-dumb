@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace ComputerInterface
+namespace ComputerInterface.Extensions
 {
     /// <summary>
     /// Bunch of extension methods for the <see cref="StringBuilder"/>
@@ -115,7 +115,7 @@ namespace ComputerInterface
         {
             if (str.Length > length)
             {
-                var newStr = str.Substring(0, length-3);
+                string newStr = str.Substring(0, length - 3);
                 return newStr + "...";
             }
 
