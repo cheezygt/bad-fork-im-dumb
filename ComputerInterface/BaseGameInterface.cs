@@ -1,63 +1,23 @@
-using System;
 using BepInEx;
+using ComputerInterface.Extensions;
+using ComputerInterface.Interfaces;
 using GorillaNetworking;
 using HarmonyLib;
 using Photon.Pun;
+using System;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
 namespace ComputerInterface
 {
-    // TODO: Refactor to PlayerModel instance
     public static class BaseGameInterface
     {
         public const int MAX_ROOM_LENGTH = 10;
         public const int MAX_NAME_LENGTH = 12;
 
-        #region Color/Colour settings
-
-        public static void SetColor(float r, float g, float b)
-        {
-            PlayerPrefs.SetFloat("redValue", Mathf.Clamp(r, 0f, 1f));
-            PlayerPrefs.SetFloat("greenValue", Mathf.Clamp(g, 0f, 1f));
-            PlayerPrefs.SetFloat("blueValue", Mathf.Clamp(b, 0f, 1f));
-
-            GorillaTagger.Instance.UpdateColor(r, g, b);
-            PlayerPrefs.Save();
-
-            InitializeNoobMaterial(r, g, b);
-        }
-        public static void SetColor(Color color) => SetColor(color.r, color.g, color.b);
-
-        public static void GetColor(out float r, out float g, out float b)
-        {
-            r = Mathf.Clamp(PlayerPrefs.GetFloat("redValue"), 0f, 1f);
-            g = Mathf.Clamp(PlayerPrefs.GetFloat("greenValue"), 0f, 1f);
-            b = Mathf.Clamp(PlayerPrefs.GetFloat("blueValue"), 0f, 1f);
-        }
-
-        public static Color GetColor()
-        {
-            GetColor(out var r, out var g, out var b);
-            return new Color(r, g, b);
-        }
-
-        public static void InitializeNoobMaterial(float r, float g, float b) => InitializeNoobMaterial(new Color(r, g, b));
-        public static void InitializeNoobMaterial(Color color)
-        {
-            if (CheckForComputer(out var computer) && PhotonNetwork.InRoom && GorillaTagger.Instance.myVRRig != null)
-                GorillaTagger.Instance.myVRRig.RPC("InitializeNoobMaterial", RpcTarget.All, color.r, color.g, color.b, computer.leftHanded);
-        }
-
-        #endregion
-
-        #region Name settings
-
-        public static string GetName()
-        {
-            if (CheckForComputer(out var computer)) return computer.savedName;
-            return null;
-        }
+        // WordCheckResult (enum), WordCheckResultToMessage, WordAllowed
+        #region Word Checking
 
         public enum WordCheckResult
         {
@@ -69,49 +29,73 @@ namespace ComputerInterface
             ComputerNotFound
         }
 
-        public static string WordCheckResultToMessage(WordCheckResult result)
+        public static string WordCheckResultToMessage(WordCheckResult result) => result switch
         {
-            return result switch
-            {
-                WordCheckResult.Allowed => "Input is allowed",
-                WordCheckResult.Empty => "Input is empty",
-                WordCheckResult.Blank => "Input is blank",
-                WordCheckResult.NotAllowed => "Input is not allowed",
-                WordCheckResult.TooLong => "Input is too long",
-                WordCheckResult.ComputerNotFound => "Computer not found",
-                _ => throw new ArgumentOutOfRangeException(nameof(result), result, null)
-            };
-        }
+            WordCheckResult.Allowed => "Input is allowed",
+            WordCheckResult.Empty => "Input is empty",
+            WordCheckResult.Blank => "Input is blank",
+            WordCheckResult.NotAllowed => "Input is not allowed",
+            WordCheckResult.TooLong => "Input is too long",
+            WordCheckResult.ComputerNotFound => "Computer not found",
+            _ => throw new ArgumentOutOfRangeException(nameof(result), result, null)
+        };
 
         private static WordCheckResult WordAllowed(string word)
         {
             if (word.Length == 0) return WordCheckResult.Empty;
             if (string.IsNullOrWhiteSpace(word)) return WordCheckResult.Blank;
-            if (!CheckForComputer(out var computer)) return WordCheckResult.ComputerNotFound;
+            if (!CheckForComputer(out GorillaComputer computer)) return WordCheckResult.ComputerNotFound;
             if (!computer.CheckAutoBanListForName(word)) return WordCheckResult.NotAllowed;
             if (word.Length > MAX_NAME_LENGTH) return WordCheckResult.TooLong;
             return WordCheckResult.Allowed;
         }
 
-        public static WordCheckResult SetName(string name)
+        #endregion
+
+        // Disconnect, JoinRoom, GetRoomCode
+        #region Room settings
+
+        public static WordCheckResult JoinRoom(string roomId, JoinType joinType = JoinType.Solo)
         {
-            if (!CheckForComputer(out var computer))
+            WordCheckResult roomAllowed = WordAllowed(roomId);
+
+            if (roomAllowed == WordCheckResult.Allowed)
             {
-                return WordCheckResult.ComputerNotFound;
+                PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(roomId, joinType);
             }
 
-			var wordAllowed = WordAllowed(name);
+            return roomAllowed;
+        }
+
+        public static void Disconnect() => NetworkSystem.Instance.ReturnToSinglePlayer();
+
+        public static string GetRoomCode() => NetworkSystem.Instance.InRoom ? NetworkSystem.Instance.RoomName : null;
+
+        #endregion
+
+        // GetName, SetName
+        #region Name Settings
+
+        public static string GetName() => CheckForComputer(out GorillaComputer computer) ? computer.savedName : null;
+
+        public static WordCheckResult SetName(string name)
+        {
+            if (!CheckForComputer(out GorillaComputer computer)) return WordCheckResult.ComputerNotFound;
+
+            WordCheckResult wordAllowed = WordAllowed(name);
             if (wordAllowed == WordCheckResult.Allowed)
             {
                 name = name.Replace(" ", "");
+
                 computer.currentName = name;
-                PhotonNetwork.LocalPlayer.NickName = name;
+                NetworkSystem.Instance.SetMyNickName(computer.currentName);
+
                 computer.offlineVRRigNametagText.text = name;
                 computer.savedName = name;
                 PlayerPrefs.SetString("playerName", name);
                 PlayerPrefs.Save();
 
-                GetColor(out var r, out var g, out var b);
+                GetColor(out float r, out float g, out float b);
                 InitializeNoobMaterial(r, g, b);
             }
 
@@ -120,68 +104,71 @@ namespace ComputerInterface
 
         #endregion
 
+        // SetColor, GetColor, InitializeNoobMaterial
+        #region Colour Settings
+
+        public static void SetColor(float r, float g, float b)
+        {
+            PlayerPrefs.SetFloat("redValue", Mathf.Clamp01(r));
+            PlayerPrefs.SetFloat("greenValue", Mathf.Clamp01(g));
+            PlayerPrefs.SetFloat("blueValue", Mathf.Clamp01(b));
+
+            GorillaTagger.Instance.UpdateColor(r, g, b);
+            PlayerPrefs.Save();
+
+            InitializeNoobMaterial(r, g, b);
+        }
+        public static void SetColor(Color color) => SetColor(color.r, color.g, color.b);
+
+        public static void GetColor(out float r, out float g, out float b)
+        {
+            r = Mathf.Clamp01(PlayerPrefs.GetFloat("redValue"));
+            g = Mathf.Clamp01(PlayerPrefs.GetFloat("greenValue"));
+            b = Mathf.Clamp01(PlayerPrefs.GetFloat("blueValue"));
+        }
+
+        public static Color GetColor()
+        {
+            GetColor(out float r, out float g, out float b);
+            return new Color(r, g, b);
+        }
+
+        public static void InitializeNoobMaterial(float r, float g, float b) => InitializeNoobMaterial(new Color(r, g, b));
+
+        private static void InitializeNoobMaterial(Color color)
+        {
+            if (NetworkSystem.Instance.InRoom)
+                GorillaTagger.Instance.myVRRig.RPC("InitializeNoobMaterial", RpcTarget.All, color.r, color.g, color.b);
+        }
+
+        #endregion
+
+        // SetTurnMode, GetTurnMode, SetTurnValue, GetTurnValue
         #region Turn settings
 
         public static void SetTurnMode(ETurnMode turnMode)
         {
-            if (!CheckForComputer(out var computer)) return;
+            if (!CheckForComputer(out GorillaComputer computer)) return;
 
-            var turnModeString = turnMode.ToString();
-            var turnTypeField = AccessTools.Field(typeof(GorillaComputer), "turnType");
-            var turnValueField = AccessTools.Field(typeof(GorillaComputer), "turnValue");
-            turnTypeField.SetValue(computer, turnModeString);
+            string turnModeString = turnMode.ToString().ToUpper();
+            computer.SetField("turnType", turnModeString);
+
             PlayerPrefs.SetString("stickTurning", turnModeString);
             PlayerPrefs.Save();
-            GorillaTagger.Instance.GetComponent<GorillaSnapTurn>().ChangeTurnMode(turnModeString, (int)turnValueField.GetValue(computer));
+
+            GorillaTagger.Instance.GetComponent<GorillaSnapTurn>().ChangeTurnMode(turnModeString, computer.GetField<int>("turnValue"));
         }
 
         public static ETurnMode GetTurnMode()
         {
-            var turnMode = PlayerPrefs.GetString("stickTurning");
-            if (turnMode.IsNullOrWhiteSpace()) return ETurnMode.NONE;
-            return (ETurnMode)Enum.Parse(typeof(ETurnMode), turnMode);
+            string turnMode = PlayerPrefs.GetString("stickTurning");
+            if (turnMode.IsNullOrWhiteSpace()) return ETurnMode.None;
+            return (ETurnMode)Enum.Parse(typeof(ETurnMode), string.Concat(turnMode.ToUpper()[1], turnMode.ToLower()[1..]));
         }
-
-        #endregion
-
-        #region Item settings
-
-        public static void SetInstrumentVolume(int value)
-        {
-            PlayerPrefs.SetFloat("instrumentVolume", value / 50f);
-            PlayerPrefs.Save();
-        }
-
-        public static float GetInstrumentVolume()
-        {
-            float instVolume = PlayerPrefs.GetFloat("instrumentVolume", 0.1f);
-            return (instVolume);
-        }
-
-        public static void SetItemMode(bool disableParticles)
-        {
-            if (!CheckForComputer(out var computer)) return;
-
-            computer.disableParticles = disableParticles;
-            PlayerPrefs.SetString("disableParticles", disableParticles ? "TRUE" : "FALSE");
-            PlayerPrefs.Save();
-            GorillaTagger.Instance.ShowCosmeticParticles(!disableParticles);
-        }
-
-        public static bool GetItemMode()
-        {
-            string itemMode = PlayerPrefs.GetString("disableParticles");
-            if (itemMode.IsNullOrWhiteSpace()) return false;
-            return itemMode == "TRUE";
-        }
-
-        #endregion
-
-        #region Turn settings
 
         public static void SetTurnValue(int value)
         {
-            if (!CheckForComputer(out var computer)) return;
+            if (!CheckForComputer(out GorillaComputer computer)) return;
 
             computer.SetField("turnValue", value);
             PlayerPrefs.SetInt("turnFactor", value);
@@ -189,20 +176,46 @@ namespace ComputerInterface
             GorillaTagger.Instance.GetComponent<GorillaSnapTurn>().ChangeTurnMode(computer.GetField<string>("turnType"), value);
         }
 
-        public static int GetTurnValue()
-        {
-            return PlayerPrefs.GetInt("turnFactor", 4);
-        }
+        public static int GetTurnValue() => PlayerPrefs.GetInt("turnFactor", 4);
 
         #endregion
 
+        // SetInstrumentVolume, GetInstrumentVolume, SetItemMode, GetItemMode
+        #region Item settings
+
+        public static void SetInstrumentVolume(int value)
+        {
+            if (!CheckForComputer(out GorillaComputer computer)) return;
+
+            computer.instrumentVolume = value / 50f;
+            PlayerPrefs.SetFloat("instrumentVolume", computer.instrumentVolume);
+            PlayerPrefs.Save();
+        }
+
+        public static float GetInstrumentVolume() => PlayerPrefs.GetFloat("instrumentVolume", 0.1f);
+
+        public static void SetItemMode(bool disableParticles)
+        {
+            if (!CheckForComputer(out GorillaComputer computer)) return;
+
+            computer.disableParticles = disableParticles;
+            PlayerPrefs.SetString("disableParticles", disableParticles ? "TRUE" : "FALSE");
+            PlayerPrefs.Save();
+            GorillaTagger.Instance.ShowCosmeticParticles(!disableParticles);
+        }
+
+        public static bool GetItemMode() => PlayerPrefs.GetString("disableParticles") == "TRUE";
+
+        #endregion
+
+        // SetPttMode, GetPttMode
         #region Microphone settings
 
         public static void SetPttMode(EPTTMode mode)
         {
-            if (!CheckForComputer(out var computer)) return;
+            if (!CheckForComputer(out GorillaComputer computer)) return;
 
-            var modeString = mode switch
+            string modeString = mode switch
             {
                 EPTTMode.AllChat => "ALL CHAT",
                 EPTTMode.PushToTalk => "PUSH TO TALK",
@@ -215,44 +228,44 @@ namespace ComputerInterface
             PlayerPrefs.Save();
         }
 
-        public static EPTTMode GetPttMode()
+        public static EPTTMode GetPttMode() => PlayerPrefs.GetString("pttType", "ALL CHAT") switch
         {
-            var modeString = PlayerPrefs.GetString("pttType", "ALL CHAT");
-            return modeString switch
-            {
-                "ALL CHAT" => EPTTMode.AllChat,
-                "PUSH TO TALK" => EPTTMode.PushToTalk,
-                "PUSH TO MUTE" => EPTTMode.PushToMute,
-                _ => throw new ArgumentOutOfRangeException()
-            };
-        }
+            "ALL CHAT" => EPTTMode.AllChat,
+            "PUSH TO TALK" => EPTTMode.PushToTalk,
+            "PUSH TO MUTE" => EPTTMode.PushToMute,
+            _ => throw new ArgumentOutOfRangeException()
+        };
 
         #endregion
 
+        // SetVoiceMode, GetVoiceMode
         #region Voice settings
 
-        public static void SetVoiceMode(bool voiceChatOn)
+        public static void SetVoiceMode(bool humanVoiceOn)
         {
-            if (!CheckForComputer(out var computer)) return;
-            computer.voiceChatOn = voiceChatOn ? "TRUE" : "FALSE";
+            if (!CheckForComputer(out GorillaComputer computer)) return;
+
+            computer.voiceChatOn = humanVoiceOn ? "TRUE" : "FALSE";
             PlayerPrefs.SetString("voiceChatOn", computer.voiceChatOn);
             PlayerPrefs.Save();
+
+            Assembly GorillaAssembly = typeof(GorillaTagger).Assembly;
+            Type ContainerType = GorillaAssembly.GetType("RigContainer");
+            AccessTools.Method(ContainerType, "RefreshAllRigVoices").Invoke(null, null);
         }
 
-        public static bool GetVoiceMode()
-        {
-            return PlayerPrefs.GetString("voiceChatOn", "TRUE") == "TRUE";
-        }
+        public static bool GetVoiceMode() => PlayerPrefs.GetString("voiceChatOn", "TRUE") == "TRUE";
 
         #endregion
 
+        // JoinGroupMap, GetGroupJoinMaps
         #region Group settings
 
         public static void JoinGroupMap(int map)
         {
-            if (!CheckForComputer(out var computer)) return;
+            if (!CheckForComputer(out GorillaComputer computer)) return;
 
-            var allowedMapsToJoin = GetGroupJoinMaps();
+            string[] allowedMapsToJoin = GetGroupJoinMaps();
 
             map = Mathf.Min(allowedMapsToJoin.Length - 1, map);
 
@@ -265,55 +278,35 @@ namespace ComputerInterface
             computer.OnGroupJoinButtonPress(Mathf.Min(allowedMapsToJoin.Length - 1, map), computer.friendJoinCollider);
         }
 
-        public static string[] GetGroupJoinMaps()
-        {
-            if (!CheckForComputer(out var computer)) return Array.Empty<string>();
-            return computer.allowedMapsToJoin;
-        }
+        public static string[] GetGroupJoinMaps() => CheckForComputer(out GorillaComputer computer) ? computer.allowedMapsToJoin : Array.Empty<string>();
 
         #endregion
 
-        #region Room settings
-
-        public static void Disconnect()
-        {
-            if (CheckForComputer(out var computer))
-            {
-                computer.networkController.AttemptDisconnect();
-            }
-        }
-
-        public static WordCheckResult JoinRoom(string roomId)
-        {
-            if (!CheckForComputer(out var computer))
-            {
-                return WordCheckResult.ComputerNotFound;
-            }
-
-            var roomAllowed = WordAllowed(roomId);
-
-            if (roomAllowed == WordCheckResult.Allowed)
-            {
-                computer.networkController.AttemptToJoinSpecificRoom(roomId);
-            }
-
-            return roomAllowed;
-        }
-
-        public static string GetRoomCode()
-        {
-            if (PhotonNetwork.InRoom) return PhotonNetwork.CurrentRoom.Name;
-            return null;
-        }
-
-        #endregion
-
+        // displaySupportTab (bool)
         #region Support settings
 
         public static bool displaySupportTab;
 
         #endregion
 
+        // SetQueue, GetQueue, AllowedInCompetitive
+        #region Queue settings
+
+        public static void SetQueue(IQueueInfo queue)
+        {
+            if (queue.QueueName == "COMPETITIVE" && !AllowedInCompetitive()) return;
+
+            GorillaComputer.instance.currentQueue = queue.QueueName;
+            PlayerPrefs.SetString("currentQueue", queue.QueueName);
+        }
+
+        public static string GetQueue() => PlayerPrefs.GetString("currentQueue", "DEFAULT");
+
+        public static bool AllowedInCompetitive() => CheckForComputer(out GorillaComputer computer) && computer.allowedInCompetitive;
+
+        #endregion
+
+        // InitColorState, InitNameState, InitTurnState, InitMicState, InitVoiceMode, InitItemMode, InitSupportMode, InitAll
         #region Initialization
 
         public static void InitColorState()
@@ -326,16 +319,16 @@ namespace ComputerInterface
 
         public static void InitNameState()
         {
-            var name = PlayerPrefs.GetString("playerName", "gorilla");
+            string name = PlayerPrefs.GetString("playerName", "gorilla");
             SetName(name);
         }
 
         public static void InitTurnState()
         {
-            var gorillaTurn = GorillaTagger.Instance.GetComponent<GorillaSnapTurn>();
-            var defaultValue = Application.platform == RuntimePlatform.Android ? "NONE" : "SNAP";
-            var turnType = PlayerPrefs.GetString("stickTurning", defaultValue);
-            var turnValue = PlayerPrefs.GetInt("turnFactor", 4);
+            GorillaSnapTurn gorillaTurn = GorillaTagger.Instance.GetComponent<GorillaSnapTurn>();
+            string defaultValue = Application.platform == RuntimePlatform.Android ? "NONE" : "SNAP";
+            string turnType = PlayerPrefs.GetString("stickTurning", defaultValue);
+            int turnValue = PlayerPrefs.GetInt("turnFactor", 4);
             gorillaTurn.ChangeTurnMode(turnType, turnValue);
         }
 
@@ -354,16 +347,6 @@ namespace ComputerInterface
             SetItemMode(GetItemMode());
         }
 
-        public static string InitGameMode(string gamemode = "")
-        {
-            if (!CheckForComputer(out var computer)) return "";
-
-            string currentGameMode = gamemode.IsNullOrWhiteSpace() ? PlayerPrefs.GetString("currentGameMode", "INFECTION") : gamemode;
-            computer.currentGameMode = currentGameMode;
-            computer.OnModeSelectButtonPress(currentGameMode, computer.leftHanded);
-            return currentGameMode;
-        }
-
         public static void InitSupportMode()
         {
             displaySupportTab = false;
@@ -379,18 +362,10 @@ namespace ComputerInterface
             InitItemMode();
             InitSupportMode();
 
-            // The computer will reset custom gamemodes when start is called
-            // var gamemode = InitGameMode();
-
-
-            if (CheckForComputer(out var computer))
+            if (CheckForComputer(out GorillaComputer computer))
             {
-                computer.InvokeMethod("Awake");
+                computer.InvokeMethod("Start");
             }
-
-            // InitGameMode(gamemode);
-
-            //PhotonNetworkController.instance.SetField("pastFirstConnection", true);
         }
 
         #endregion
@@ -409,23 +384,16 @@ namespace ComputerInterface
 
         public enum ETurnMode
         {
-            SNAP,
-            SMOOTH,
-            NONE
+            Snap,
+            Smooth,
+            None
         }
 
         public enum EPTTMode
         {
-            AllChat = 0,
-            PushToTalk = 1,
-            PushToMute = 2
-        }
-
-        public enum EGameMode
-        {
-            INFECTION,
-            CASUAL,
-            HUNT
+            AllChat,
+            PushToTalk,
+            PushToMute
         }
     }
 }
