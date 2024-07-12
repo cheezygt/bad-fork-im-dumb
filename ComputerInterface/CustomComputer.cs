@@ -96,7 +96,8 @@ namespace ComputerInterface
                 { "Basement", "Basement/DungeonRoomAnchor/BasementComputer/PhysicalComputer (2)" },
                 { "Beach", "Beach/BeachComputer/PhysicalComputer (2)" },
                 { "Rotating", "RotatingMap/DO-NOT-TOUCH/UI (1)/-- Rotating PhysicalComputer UI --" },
-                { "Metropolis", "MetroMain/ComputerArea/PhysicalComputer UI --" }
+                { "Metropolis", "MetroMain/ComputerArea/PhysicalComputer UI --" },
+                { "Attic", "AtticRoomAttic/AtticComputer/PhysicalComputer (2)" }
             };
             PrepareMonitor(SceneManager.GetActiveScene(), _computerPathDictionary["GorillaTag"]);
 
@@ -265,7 +266,7 @@ namespace ComputerInterface
 
         private async void PrepareMonitor(Scene scene, string computerPath)
         {
-            GameObject physicalComputer = scene.FindByPath(computerPath);
+            GameObject physicalComputer = GameObject.Find(computerPath);
 
             try
             {
@@ -451,6 +452,12 @@ namespace ComputerInterface
                 newMonitor.transform.localPosition = new Vector3(-0.3466f, 0.6184f, 3.1066f);
                 newMonitor.transform.position = new Vector3(-36.9952f, 4.0184f, -144.1544f);
                 newMonitor.transform.eulerAngles = new Vector3(0, 27.5719f, 0);
+            }
+            if (newMonitor.name == "Computer Interface (Scene - Attic)")
+            {
+                newMonitor.transform.localPosition = new Vector3(-0.3014f, 1.0341f, 0.0031f);
+                newMonitor.transform.position = new Vector3(-64.1902f, 17.3234f, -86.1522f);
+                newMonitor.transform.eulerAngles = new Vector3(359.9803f, 339.3213f, -0.0027f);
             }
             newMonitor.transform.SetParent(physicalComputer.transform.parent, true);
             newMonitor.transform.Find("Main Monitor").gameObject.AddComponent<GorillaSurfaceOverride>();
