@@ -90,13 +90,14 @@ namespace ComputerInterface
 
             _computerPathDictionary = new()
             {
-                { "GorillaTag", "Environment Objects/LocalObjects_Prefab/TreeRoom/TreeRoomInteractables/UI/-- PhysicalComputer UI --" },
-                { "Mountain", "Mountain/Geometry/goodigloo/PhysicalComputer (2)" },
-                { "Skyjungle", "skyjungle/UI/-- Clouds PhysicalComputer UI --" },
-                { "Basement", "Basement/DungeonRoomAnchor/BasementComputer/PhysicalComputer (2)" },
-                { "Beach", "Beach/BeachComputer/PhysicalComputer (2)" },
+                { "GorillaTag", "Environment Objects/LocalObjects_Prefab/TreeRoom/TreeRoomInteractables/GorillaComputerObject/ComputerUI" },
+                { "Mountain", "Mountain/Geometry/goodigloo/GorillaComputerObject/ComputerUI" },
+                { "Skyjungle", "skyjungle/UI/GorillaComputerObject/ComputerUI" },
+                { "Basement", "Basement/DungeonRoomAnchor/BasementComputer/GorillaComputerObject/ComputerUI" },
+                { "Beach", "Beach/BeachComputer/GorillaComputerObject/ComputerUI" },
                 { "Rotating", "RotatingMap/DO-NOT-TOUCH/UI (1)/-- Rotating PhysicalComputer UI --" },
-                { "Metropolis", "MetroMain/ComputerArea/PhysicalComputer UI --" }
+                { "Metropolis", "MetroMain/ComputerArea/GorillaComputerObject/ComputerUI" },
+                { "Attic", "AtticRoomAttic/AtticComputer/GorillaComputerObject/ComputerUI" }
             };
             PrepareMonitor(SceneManager.GetActiveScene(), _computerPathDictionary["GorillaTag"]);
 
@@ -265,7 +266,7 @@ namespace ComputerInterface
 
         private async void PrepareMonitor(Scene scene, string computerPath)
         {
-            GameObject physicalComputer = scene.FindByPath(computerPath);
+            GameObject physicalComputer = GameObject.Find(computerPath);
 
             try
             {
@@ -396,6 +397,16 @@ namespace ComputerInterface
             // Beach
             t ??= button.transform.parent?.parent?.parent?.parent?.parent?.Find("UI FOR BEACH COMPUTER/Text/" + name);
 
+            // Rotating
+            t ??= button.transform.parent?.parent?.parent?.parent?.Find("KeyboardUI/" + name);
+            t ??= button.transform.parent?.parent?.parent?.parent?.Find("KeyboardUI/" + name + " (1)");
+
+            // Metropolis
+            t ??= button.transform.parent?.parent?.Find("Text/" + name);
+
+            // Attic
+            t ??= button.transform.parent?.parent?.Find("Text/" + name);
+
             return t.GetComponent<Text>();
         }
 
@@ -440,18 +451,6 @@ namespace ComputerInterface
             newMonitor.transform.SetParent(physicalComputer.transform.Find("monitor") ?? physicalComputer.transform.Find("monitor (1)"), false);
             newMonitor.transform.localPosition = new Vector3(-0.0787f, -0.12f, 0.5344f);
             newMonitor.transform.localEulerAngles = Vector3.right * 90f;
-            if (newMonitor.name == "Computer Interface (Scene - GorillaTag)")
-            {
-                newMonitor.transform.localPosition = new Vector3(-9.9237f, 23.0214f, 9.9584f);
-                newMonitor.transform.position = new Vector3(-65.2581f, 12.01f, -79.9038f);
-                newMonitor.transform.eulerAngles = new Vector3(0, 205, 0);
-            }
-            if (newMonitor.name == "Computer Interface (Scene - Metropolis)")
-            {
-                newMonitor.transform.localPosition = new Vector3(-0.3466f, 0.6184f, 3.1066f);
-                newMonitor.transform.position = new Vector3(-36.9952f, 4.0184f, -144.1544f);
-                newMonitor.transform.eulerAngles = new Vector3(0, 27.5719f, 0);
-            }
             newMonitor.transform.SetParent(physicalComputer.transform.parent, true);
             newMonitor.transform.Find("Main Monitor").gameObject.AddComponent<GorillaSurfaceOverride>();
 
