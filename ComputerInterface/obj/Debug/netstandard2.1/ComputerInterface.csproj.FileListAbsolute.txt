@@ -1,5 +1,0 @@
-C:\Users\macie\Downloads\GorillaInterface-main\GorillaInterface-main\ComputerInterface\obj\Debug\netstandard2.1\ComputerInterface.csproj.AssemblyReference.cache
-C:\Users\macie\Downloads\GorillaInterface-main\GorillaInterface-main\ComputerInterface\obj\Debug\netstandard2.1\ComputerInterface.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\macie\Downloads\GorillaInterface-main\GorillaInterface-main\ComputerInterface\obj\Debug\netstandard2.1\ComputerInterface.AssemblyInfoInputs.cache
-C:\Users\macie\Downloads\GorillaInterface-main\GorillaInterface-main\ComputerInterface\obj\Debug\netstandard2.1\ComputerInterface.AssemblyInfo.cs
-C:\Users\macie\Downloads\GorillaInterface-main\GorillaInterface-main\ComputerInterface\obj\Debug\netstandard2.1\ComputerInterface.csproj.CoreCompileInputs.cache
